@@ -211,28 +211,51 @@ if df is not None:
     ])
 
     with tab1:
-        c1, c2 = st.columns(2)
-        with c1:
-            st.subheader("📌 Active Incident Ageing Matrix")
-            if 'Ageing_Bucket' in df.columns and service_col:
-                ageing_table = pd.crosstab(
-                    df['Ageing_Bucket'],
-                    df[service_col],
-                    margins=True,
-                    margins_name="Total"
-                )
-                st.dataframe(ageing_table, use_container_width=True)
-            else:
-                st.info("Missing required columns for Ageing Matrix calculation.")
+        st.subheader("📌 Active Incident Ageing Matrix")
+        st.caption("Tracks open issues by how long they have been sitting in the queue without resolution.")
 
-        with c2:
-            st.subheader("⏰ SLA Performance Summary")
-            if sla_col:
-                sla_df = df[sla_col].value_counts().reset_index()
-                sla_df.columns = ['Made SLA Status', 'Incident Count']
-                st.dataframe(sla_df, use_container_width=True)
-            else:
-                st.info("SLA Status column not available.")
+        if 'Ageing_Bucket' in df.columns and service_col:
+            # Summary metrics
+            total_active = len(df)
+            old_tickets = len(df[df['Age_Weeks'] > 4]) if 'Age_Weeks' in df.columns else 0
+            
+            sum_col1, sum_col2 = st.columns(2)
+            sum_col1.metric("Total Open Queue", f"{total_active} Tickets")
+            sum_col2.metric("Stale Backlog (>4 Weeks)", f"{old_tickets} Tickets", delta="-Needs Action" if old_tickets > 0 else "Clean", delta_color="inverse")
+
+            st.markdown("<br>", unsafe_allow_html=True)
+            
+            # Ageing matrix table
+            ageing_table = pd.crosstab(
+                df['Ageing_Bucket'],
+                df[service_col],
+                margins=True,
+                margins_name="Total Open"
+            )
+            ageing_table.index.name = "Ticket Age Bracket"
+            st.dataframe(ageing_table, use_container_width=True)
+
+            # Help guide for team meetings
+            with st.expander("💡 How to read this matrix (Quick Guide)"):
+                st.markdown("""
+                * **Rows (0-1 Wks to >8 Wks):** How long tickets have been open. Top rows are fresh; bottom rows are getting stale.
+                * **Columns:** The specific service or team area handling the ticket.
+                * **Red Flag Area:** Any number greater than `0` in the **4-8 Wks** or **>8 Wks** rows should be prioritized and reviewed in standup meetings.
+                """)
+        else:
+            st.info("Missing required columns for Ageing Matrix calculation.")
+
+        st.markdown("---")
+        
+        # SLA Breakdown Block
+        st.subheader("⏰ SLA Performance Summary")
+        if sla_col:
+            sla_df = df[sla_col].value_counts().reset_index()
+            sla_df.columns = ['SLA Status', 'Ticket Count']
+            sla_df['SLA Status'] = sla_df['SLA Status'].map({True: 'Met SLA Deadline', False: 'Breached SLA Deadline'})
+            st.dataframe(sla_df, use_container_width=True)
+        else:
+            st.info("SLA Status column not available.")
 
     with tab2:
         st.subheader("🏆 Team Leaderboard & Appreciation Matrix")
