@@ -3,28 +3,139 @@ import pandas as pd
 import numpy as np
 from pathlib import Path
 
-# Define data file paths
-DATA_FILE = Path("INCIDENT_YTD_DUMP.xlsx")
-FALLBACK_DATA_FILE = Path("INCIDENT_YTD_DUMP.csv")
-
 # Page Configuration
 st.set_page_config(
-    page_title="Executive Ticket & CHG Analyzer",
-    page_icon="📊",
-    layout="wide"
+    page_title="Executive Dashboard",
+    page_icon="⚡",
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
+
+# ---------------------------------------------------------
+# Custom Styling & Glassmorphic CSS Logic
+# ---------------------------------------------------------
+def apply_custom_css():
+    st.markdown("""
+        <style>
+        /* Modern Background & Font Styles */
+        .stApp {
+            background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%);
+            color: #f8fafc;
+        }
+
+        /* Centered Glassmorphism Login Container */
+        div[data-testid="stForm"] {
+            background: rgba(255, 255, 255, 0.03) !important;
+            backdrop-filter: blur(16px) saturate(180%);
+            -webkit-backdrop-filter: blur(16px) saturate(180%);
+            border: 1px solid rgba(255, 255, 255, 0.125) !important;
+            border-radius: 20px !important;
+            padding: 2.5rem !important;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4) !important;
+            max-width: 450px;
+            margin: 2rem auto;
+            animation: fadeIn 0.8s ease-in-out;
+        }
+
+        /* Inputs Styling */
+        div[data-testid="stForm"] input {
+            background: rgba(15, 23, 42, 0.6) !important;
+            border: 1px solid rgba(255, 255, 255, 0.15) !important;
+            border-radius: 10px !important;
+            color: #ffffff !important;
+            transition: all 0.3s ease;
+        }
+        div[data-testid="stForm"] input:focus {
+            border-color: #6366f1 !important;
+            box-shadow: 0 0 12px rgba(99, 102, 241, 0.4) !important;
+        }
+
+        /* Gradient Submit Button */
+        div[data-testid="stForm"] button {
+            background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%) !important;
+            color: white !important;
+            border: none !important;
+            border-radius: 10px !important;
+            font-weight: 600 !important;
+            letter-spacing: 0.5px;
+            padding: 0.6rem 1rem !important;
+            transition: transform 0.2s ease, box-shadow 0.2s ease !important;
+            width: 100%;
+        }
+        div[data-testid="stForm"] button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(168, 85, 247, 0.4) !important;
+        }
+
+        /* Subtle Fade Animation */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(15px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        </style>
+    """, unsafe_allow_html=True)
+
+# ---------------------------------------------------------
+# Aesthetic Authentication System
+# ---------------------------------------------------------
+def check_password():
+    if "authenticated" not in st.session_state:
+        st.session_state["authenticated"] = False
+
+    if st.session_state["authenticated"]:
+        return True
+
+    apply_custom_css()
+
+    # Aesthetic Centered Layout Spacing
+    _, center_col, _ = st.columns([1, 2.5, 1])
+
+    with center_col:
+        st.markdown("<h2 style='text-align: center; font-weight: 700; margin-bottom: 0;'>🔐 Executive Portal</h2>", unsafe_allow_html=True)
+        st.markdown("<p style='text-align: center; color: #94a3b8; font-size: 0.9rem; margin-bottom: 1.5rem;'>Enter your credentials to access live analytics</p>", unsafe_allow_html=True)
+        
+        with st.form("login_form"):
+            username = st.text_input("Username", placeholder="e.g. admin")
+            password = st.text_input("Password", type="password", placeholder="••••••••")
+            submit_button = st.form_submit_button("Sign In →")
+
+            if submit_button:
+                # Set your customized username and password here
+                if username == "admin" and password == "ticket123":
+                    st.session_state["authenticated"] = True
+                    st.rerun()
+                else:
+                    st.error("Invalid Username or Password")
+
+    return False
+
+if not check_password():
+    st.stop()
+
+# ---------------------------------------------------------
+# Dashboard Application (Unlocked after Login)
+# ---------------------------------------------------------
+
+# Sidebar Logout Button
+with st.sidebar:
+    st.markdown("### 👤 User Account")
+    if st.button("🚪 Logout", use_container_width=True):
+        st.session_state["authenticated"] = False
+        st.rerun()
+    st.markdown("---")
+
+# File Paths
+DATA_FILE = Path("INCIDENT_YTD_DUMP.xlsx")
+FALLBACK_DATA_FILE = Path("INCIDENT_YTD_DUMP.csv")
 
 st.title("📊 Executive Ticket & CHG Dashboard")
 st.caption("Automated Incident & Change Request Analytics")
 
-# Replace this with your exact Raw GitHub URL (if pulling directly from online repository)
-GITHUB_FILE_URL = "https://raw.githubusercontent.com/Lakshya190104/ticket-analyzer/main/INCIDENT_YTD_DUMP.xlsx"
-
-@st.cache_data(ttl=300)  # Caches data for 5 minutes before checking GitHub for changes again
+@st.cache_data(ttl=300)
 def load_local_data(path):
     try:
         return pd.read_excel(path, engine="openpyxl")
-    except Exception as e:
+    except Exception:
         return None
 
 # Sidebar Data Source Handling
@@ -46,10 +157,9 @@ else:
     df = load_local_data(source_file) if source_file.exists() else None
 
 if df is not None:
-    # Clean column headers
     df.columns = df.columns.str.strip()
 
-    # 1. Date & Ageing Calculation Logic
+    # 1. Date & Ageing Calculation
     opened_col = next((col for col in df.columns if 'open' in col.lower()), None)
 
     if opened_col:
@@ -58,7 +168,6 @@ if df is not None:
         df['Age_Days'] = (now - df[opened_col]).dt.days
         df['Age_Weeks'] = df['Age_Days'] / 7
 
-        # Standard ageing buckets
         bins = [-np.inf, 1, 2, 4, 8, np.inf]
         labels = ['0-1 Wks', '1-2 Wks', '2-4 Wks', '4-8 Wks', '>8 Wks']
         df['Ageing_Bucket'] = pd.cut(df['Age_Weeks'], bins=bins, labels=labels)
@@ -66,7 +175,6 @@ if df is not None:
     # 2. Dynamic Sidebar Filters
     st.sidebar.header("🔍 Filters")
 
-    # Service Offering Filter
     service_col = next((col for col in df.columns if 'service offering' in col.lower()), None)
     if service_col and df[service_col].notna().any():
         selected_services = st.sidebar.multiselect(
@@ -76,7 +184,6 @@ if df is not None:
         if selected_services:
             df = df[df[service_col].isin(selected_services)]
 
-    # Assigned To Filter
     assigned_col = next((col for col in df.columns if 'assigned to' in col.lower()), None)
     if assigned_col and df[assigned_col].notna().any():
         selected_assignees = st.sidebar.multiselect(
