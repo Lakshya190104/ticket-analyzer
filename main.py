@@ -308,8 +308,3 @@ if df is not None:
 
 else:
     st.error("Dataset missing. Verify configuration or upload manually via sidebar.")
-            st.subheader("🔍 Complete Raw Data Access")
-            st.dataframe(df, use_container_width=True, height=220)
-
-else:
-    st.error("Dataset missing. Verify configuration or upload manually via sidebar.")
