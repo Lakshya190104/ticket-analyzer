@@ -17,20 +17,18 @@ st.set_page_config(
 st.title("📊 Executive Ticket & CHG Dashboard")
 st.caption("Automated Incident & Change Request Analytics")
 
-# Replace this with your exact Raw GitHub URL (or local file name if in the same folder)
+# Replace this with your exact Raw GitHub URL (if pulling directly from online repository)
 GITHUB_FILE_URL = "https://raw.githubusercontent.com/Lakshya190104/ticket-analyzer/main/INCIDENT_YTD_DUMP.xlsx"
 
 @st.cache_data(ttl=300)  # Caches data for 5 minutes before checking GitHub for changes again
 def load_local_data(path):
     try:
-        if str(path).endswith('.csv'):
-            return pd.read_csv(path)
         return pd.read_excel(path, engine="openpyxl")
     except Exception as e:
         return None
 
 # Sidebar Data Source Handling
-st.sidebar.header("📥 Data Source")
+st.sidebar.header("📊 Data Source")
 use_manual_upload = st.sidebar.checkbox("Override with manual file upload")
 
 df = None
@@ -43,7 +41,7 @@ if use_manual_upload:
         else:
             df = pd.read_excel(uploaded_file, engine="openpyxl")
 else:
-    st.sidebar.info(f"📄 Reading {DATA_FILE.name}")
+    st.sidebar.info(f"📁 Reading {DATA_FILE.name}")
     source_file = DATA_FILE if DATA_FILE.exists() else FALLBACK_DATA_FILE
     df = load_local_data(source_file) if source_file.exists() else None
 
@@ -53,7 +51,7 @@ if df is not None:
 
     # 1. Date & Ageing Calculation Logic
     opened_col = next((col for col in df.columns if 'open' in col.lower()), None)
-    
+
     if opened_col:
         df[opened_col] = pd.to_datetime(df[opened_col], errors='coerce')
         now = pd.Timestamp.now()
@@ -67,12 +65,12 @@ if df is not None:
 
     # 2. Dynamic Sidebar Filters
     st.sidebar.header("🔍 Filters")
-    
+
     # Service Offering Filter
     service_col = next((col for col in df.columns if 'service offering' in col.lower()), None)
     if service_col and df[service_col].notna().any():
         selected_services = st.sidebar.multiselect(
-            "Service Offering", 
+            "Service Offering",
             options=df[service_col].dropna().unique()
         )
         if selected_services:
@@ -82,7 +80,7 @@ if df is not None:
     assigned_col = next((col for col in df.columns if 'assigned to' in col.lower()), None)
     if assigned_col and df[assigned_col].notna().any():
         selected_assignees = st.sidebar.multiselect(
-            "Assigned To", 
+            "Assigned To",
             options=df[assigned_col].dropna().unique()
         )
         if selected_assignees:
@@ -90,9 +88,9 @@ if df is not None:
 
     # 3. KPI Summary Metrics
     col1, col2, col3, col4 = st.columns(4)
-    
+
     col1.metric("Total Incidents", f"{len(df):,}")
-    
+
     priority_col = next((col for col in df.columns if 'priority' in col.lower()), None)
     high_prio_count = len(df[df[priority_col].astype(str).str.contains('1|2|High', case=False, na=False)]) if priority_col else 0
     col2.metric("High / Critical Priority", f"{high_prio_count:,}")
@@ -113,16 +111,16 @@ if df is not None:
         st.subheader("📌 Ageing Active Incident Matrix")
         if 'Ageing_Bucket' in df.columns and service_col:
             ageing_table = pd.crosstab(
-                df['Ageing_Bucket'], 
-                df[service_col], 
-                margins=True, 
+                df['Ageing_Bucket'],
+                df[service_col],
+                margins=True,
                 margins_name="Total"
             )
             st.dataframe(ageing_table, use_container_width=True)
         else:
             st.info("Missing 'Opened' date or 'Service Offering' column.")
 
-        st.subheader("⏱️ Volume & Breakdown by Priority")
+        st.subheader("📋 Volume & Breakdown by Priority")
         if priority_col:
             priority_summary = df.groupby(priority_col).size().reset_index(name='Ticket Count')
             st.dataframe(priority_summary, use_container_width=True)
@@ -131,11 +129,11 @@ if df is not None:
         st.subheader("📝 TL Notes & Highlights")
         st.text_area(
             "Status Notes",
-            value="• Operations: Incident resolution in progress.\n• PBI R&S Team fix expected by end of week.\n• Ageing tickets actively monitored.",
+            value="• Operations: Incident resolution in progress.\n• PBI R&S Team fix expected by end of week.\n• Ageing ticket cleanup ongoing.",
             height=160
         )
 
-        st.subheader("🚨 SLA Performance")
+        st.subheader("⏰ SLA Performance")
         if sla_col:
             sla_df = df[sla_col].value_counts().reset_index()
             sla_df.columns = ['Made SLA', 'Count']
