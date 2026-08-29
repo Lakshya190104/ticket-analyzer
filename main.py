@@ -18,12 +18,12 @@ st.title("📊 Executive Ticket & CHG Dashboard")
 st.caption("Automated Incident & Change Request Analytics")
 
 # Replace this with your exact Raw GitHub URL (or local file name if in the same folder)
-GITHUB_FILE_URL = "https://github.com/Lakshya190104/ticket-analyzer/blob/main/INCIDENT_YTD_DUMP.xlsx"
-
+GITHUB_FILE_URL = "https://raw.githubusercontent.com/Lakshya190104/ticket-analyzer/main/INCIDENT_YTD_DUMP.xlsx"
 @st.cache_data(ttl=300)  # Caches data for 5 minutes before checking GitHub for changes again
 def load_local_data(path):
+    def load_local_data(path):
     try:
-        return pd.read_excel(path)
+        return pd.read_excel(path, engine="openpyxl")
     except Exception as e:
         return None
 
@@ -39,7 +39,7 @@ if use_manual_upload:
         if uploaded_file.name.endswith('.csv'):
             df = pd.read_csv(uploaded_file)
         else:
-            df = pd.read_excel(uploaded_file)
+            df = pd.read_excel(uploaded_file, engine="openpyxl")
 else:
     st.sidebar.info(f"📄 Reading {DATA_FILE.name}")
     source_file = DATA_FILE if DATA_FILE.exists() else FALLBACK_DATA_FILE
