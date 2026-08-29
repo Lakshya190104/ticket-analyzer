@@ -144,7 +144,7 @@ else:
     df = load_local_data(source_file) if source_file.exists() else None
 
 st.title("📊 Executive Ticket & CHG Analytics")
-st.caption("Real-time Operational Performance & Team Recognition Leaderboard")
+st.caption("Real-time Operational Performance & Priority Analytics Dashboard")
 
 if df is not None:
     df.columns = df.columns.str.strip()
@@ -152,6 +152,7 @@ if df is not None:
     # Column mappings
     opened_col = next((col for col in df.columns if 'open' in col.lower()), None)
     assigned_col = next((col for col in df.columns if 'assigned to' in col.lower() or 'assignee' in col.lower()), None)
+    priority_col = next((col for col in df.columns if 'priority' in col.lower()), None)
     sla_col = next((col for col in df.columns if 'sla' in col.lower() and 'made' in col.lower()), None)
 
     if opened_col:
@@ -190,8 +191,7 @@ if df is not None:
 
     col1.metric("Total Incidents", f"{len(df):,}")
 
-    priority_col = next((col for col in df.columns if 'priority' in col.lower()), None)
-    high_prio_count = len(df[df[priority_col].astype(str).str.contains('1|2|High', case=False, na=False)]) if priority_col else 0
+    high_prio_count = len(df[df[priority_col].astype(str).str.contains('1|2|High|Critical', case=False, na=False)]) if priority_col else 0
     col2.metric("High / Critical Prio", f"{high_prio_count:,}")
 
     aging_count = len(df[df['Age_Weeks'] > 4]) if 'Age_Weeks' in df.columns else 0
@@ -206,7 +206,7 @@ if df is not None:
     tab1, tab2, tab3, tab4 = st.tabs([
         "📈 Executive Summary", 
         "🏆 Top Performers & Recognition", 
-        "📊 Breakdown Analytics", 
+        "📊 Priority Breakdown & Averages", 
         "📑 Sheet & Export Data"
     ])
 
@@ -249,11 +249,9 @@ if df is not None:
                 sla_stats.columns = [assigned_col, 'SLA_Compliance_%']
                 perf_df = perf_df.merge(sla_stats, on=assigned_col)
 
-            # Sort by fastest average resolution
             perf_df['Avg_Resolution_Days'] = perf_df['Avg_Resolution_Days'].round(1)
             perf_df = perf_df.sort_values(by=['Total_Resolved', 'Avg_Resolution_Days'], ascending=[False, True])
 
-            # Top Performers Highlight Cards
             top_col1, top_col2 = st.columns(2)
             with top_col1:
                 top_resolver = perf_df.iloc[0][assigned_col] if len(perf_df) > 0 else "N/A"
@@ -275,24 +273,51 @@ if df is not None:
             st.info("Column for 'Assigned To' not found in dataset.")
 
     with tab3:
-        c1, c2 = st.columns(2)
-        with c1:
-            st.subheader("📋 Priority Volume Breakdown")
-            if priority_col:
-                priority_summary = df.groupby(priority_col).size().reset_index(name='Ticket Count')
-                st.dataframe(priority_summary, use_container_width=True)
-            else:
-                st.info("Priority column not available.")
-        
-        with c2:
-            st.subheader("📊 Age Distribution Summary")
-            if 'Ageing_Bucket' in df.columns:
-                st.bar_chart(df['Ageing_Bucket'].value_counts())
+        st.subheader("📊 Priority Breakdown by Team Member")
+        st.caption("Analyze ticket counts and average resolution times broken down by ticket severity per person.")
+
+        if assigned_col and priority_col:
+            # 1. Critical Ticket Champion Highlight Card
+            critical_mask = df[priority_col].astype(str).str.contains('1|Critical|High', case=False, na=False)
+            critical_counts = df[critical_mask].groupby(assigned_col).size()
+            
+            if not critical_counts.empty:
+                top_critical_person = critical_counts.idxmax()
+                top_critical_val = critical_counts.max()
+                st.success(f"🔥 **Heavy Lifter Award:** **{top_critical_person}** handled the highest number of Critical/High priority tickets ({top_critical_val} tickets).")
+
+            c1, c2 = st.columns(2)
+
+            with c1:
+                st.markdown("### 📋 Ticket Count by Priority")
+                priority_matrix = pd.crosstab(
+                    df[assigned_col],
+                    df[priority_col],
+                    margins=True,
+                    margins_name="Total Volume"
+                )
+                st.dataframe(priority_matrix, use_container_width=True)
+
+            with c2:
+                st.markdown("### ⏱️ Avg Resolution Days by Priority")
+                if 'Age_Days' in df.columns:
+                    avg_prio_matrix = df.groupby([assigned_col, priority_col])['Age_Days'].mean().unstack().round(1)
+                    avg_prio_matrix['Overall Avg Days'] = df.groupby(assigned_col)['Age_Days'].mean().round(1)
+                    st.dataframe(avg_prio_matrix.fillna("-"), use_container_width=True)
+                else:
+                    st.info("Resolution age data not available to calculate averages.")
+
+            st.markdown("---")
+            st.markdown("### 📈 Visual Priority Distribution across Team")
+            prio_chart_data = pd.crosstab(df[assigned_col], df[priority_col])
+            st.bar_chart(prio_chart_data)
+
+        else:
+            st.info("Make sure both 'Assigned To' and 'Priority' columns exist in your dataset.")
 
     with tab4:
         st.subheader("📑 Interactive Data Sheet & Export Center")
         
-        # Download Action Button
         buffer = io.BytesIO()
         with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
             df.to_excel(writer, index=False, sheet_name='Filtered_Incidents')
