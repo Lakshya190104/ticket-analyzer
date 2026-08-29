@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from pathlib import Path
+import io
 
 # Page Configuration
 st.set_page_config(
@@ -17,39 +18,26 @@ st.set_page_config(
 def apply_custom_css():
     st.markdown("""
         <style>
-        /* Modern Background & Fonts */
         .stApp {
             background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%);
             color: #f8fafc;
         }
-
-        /* Glassmorphic Login Form */
         div[data-testid="stForm"] {
             background: rgba(255, 255, 255, 0.03) !important;
             backdrop-filter: blur(16px) saturate(180%);
-            -webkit-backdrop-filter: blur(16px) saturate(180%);
             border: 1px solid rgba(255, 255, 255, 0.125) !important;
             border-radius: 20px !important;
             padding: 2.5rem !important;
             box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4) !important;
             max-width: 450px;
             margin: 2rem auto;
-            animation: fadeIn 0.8s ease-in-out;
         }
-
-        /* Login Inputs */
         div[data-testid="stForm"] input {
             background: rgba(15, 23, 42, 0.6) !important;
             border: 1px solid rgba(255, 255, 255, 0.15) !important;
             border-radius: 10px !important;
             color: #ffffff !important;
         }
-        div[data-testid="stForm"] input:focus {
-            border-color: #6366f1 !important;
-            box-shadow: 0 0 12px rgba(99, 102, 241, 0.4) !important;
-        }
-
-        /* Gradient Login Button */
         div[data-testid="stForm"] button {
             background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%) !important;
             color: white !important;
@@ -59,8 +47,6 @@ def apply_custom_css():
             padding: 0.6rem 1rem !important;
             width: 100%;
         }
-
-        /* Metric Cards Clean Container */
         div[data-testid="stMetric"] {
             background: rgba(255, 255, 255, 0.04);
             border: 1px solid rgba(255, 255, 255, 0.08);
@@ -68,8 +54,6 @@ def apply_custom_css():
             border-radius: 14px;
             box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
         }
-
-        /* Tab Navigation Enhancements */
         .stTabs [data-baseweb="tab-list"] {
             gap: 12px;
         }
@@ -82,11 +66,6 @@ def apply_custom_css():
         .stTabs [aria-selected="true"] {
             background: #6366f1 !important;
             color: white !important;
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(15px); }
-            to { opacity: 1; transform: translateY(0); }
         }
         </style>
     """, unsafe_allow_html=True)
@@ -130,7 +109,6 @@ if not check_password():
 # Dashboard Application Structure
 # ---------------------------------------------------------
 
-# Sidebar Configuration
 with st.sidebar:
     st.markdown("### 👤 Account Control")
     if st.button("🚪 Logout", use_container_width=True):
@@ -141,7 +119,6 @@ with st.sidebar:
     st.header("⚙️ Data Settings")
     use_manual_upload = st.checkbox("Override with manual file upload")
 
-# File & Data Logic
 DATA_FILE = Path("INCIDENT_YTD_DUMP.xlsx")
 FALLBACK_DATA_FILE = Path("INCIDENT_YTD_DUMP.csv")
 
@@ -166,15 +143,17 @@ else:
     source_file = DATA_FILE if DATA_FILE.exists() else FALLBACK_DATA_FILE
     df = load_local_data(source_file) if source_file.exists() else None
 
-# Header Banner
 st.title("📊 Executive Ticket & CHG Analytics")
-st.caption("Real-time Operational Performance & Incident Tracking")
+st.caption("Real-time Operational Performance & Team Recognition Leaderboard")
 
 if df is not None:
     df.columns = df.columns.str.strip()
 
-    # Data Processing Logic
+    # Column mappings
     opened_col = next((col for col in df.columns if 'open' in col.lower()), None)
+    assigned_col = next((col for col in df.columns if 'assigned to' in col.lower() or 'assignee' in col.lower()), None)
+    sla_col = next((col for col in df.columns if 'sla' in col.lower() and 'made' in col.lower()), None)
+
     if opened_col:
         df[opened_col] = pd.to_datetime(df[opened_col], errors='coerce')
         now = pd.Timestamp.now()
@@ -185,7 +164,7 @@ if df is not None:
         labels = ['0-1 Wks', '1-2 Wks', '2-4 Wks', '4-8 Wks', '>8 Wks']
         df['Ageing_Bucket'] = pd.cut(df['Age_Weeks'], bins=bins, labels=labels)
 
-    # Sidebar Dynamic Filters
+    # Sidebar Global Filters
     st.sidebar.markdown("---")
     st.sidebar.header("🔍 Global Filters")
 
@@ -198,7 +177,6 @@ if df is not None:
         if selected_services:
             df = df[df[service_col].isin(selected_services)]
 
-    assigned_col = next((col for col in df.columns if 'assigned to' in col.lower()), None)
     if assigned_col and df[assigned_col].notna().any():
         selected_assignees = st.sidebar.multiselect(
             "Assigned To",
@@ -219,14 +197,18 @@ if df is not None:
     aging_count = len(df[df['Age_Weeks'] > 4]) if 'Age_Weeks' in df.columns else 0
     col3.metric("Ageing (> 4 Weeks)", f"{aging_count:,}")
 
-    sla_col = next((col for col in df.columns if 'sla' in col.lower() and 'made' in col.lower()), None)
     sla_breaches = len(df[df[sla_col] == False]) if sla_col else 0
     col4.metric("SLA Breaches", f"{sla_breaches:,}")
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # 2. Tab Layout to De-Clutter Interface
-    tab1, tab2, tab3 = st.tabs(["📈 Executive Summary", "📊 Breakdown Analytics", "📝 Notes & Raw Data"])
+    # 2. Main Navigation Tabs
+    tab1, tab2, tab3, tab4 = st.tabs([
+        "📈 Executive Summary", 
+        "🏆 Top Performers & Recognition", 
+        "📊 Breakdown Analytics", 
+        "📑 Sheet & Export Data"
+    ])
 
     with tab1:
         c1, c2 = st.columns(2)
@@ -244,7 +226,7 @@ if df is not None:
                 st.info("Missing required columns for Ageing Matrix calculation.")
 
         with c2:
-            st.subheader("⏰ SLA SLA Performance Summary")
+            st.subheader("⏰ SLA Performance Summary")
             if sla_col:
                 sla_df = df[sla_col].value_counts().reset_index()
                 sla_df.columns = ['Made SLA Status', 'Incident Count']
@@ -253,6 +235,46 @@ if df is not None:
                 st.info("SLA Status column not available.")
 
     with tab2:
+        st.subheader("🏆 Team Leaderboard & Appreciation Matrix")
+        st.caption("Highlighting top resolution speeds and workload completion.")
+
+        if assigned_col:
+            perf_df = df.groupby(assigned_col).agg(
+                Total_Resolved=('Age_Days', 'count'),
+                Avg_Resolution_Days=('Age_Days', 'mean')
+            ).reset_index()
+
+            if sla_col:
+                sla_stats = df.groupby(assigned_col)[sla_col].apply(lambda x: (x == True).mean() * 100).reset_index()
+                sla_stats.columns = [assigned_col, 'SLA_Compliance_%']
+                perf_df = perf_df.merge(sla_stats, on=assigned_col)
+
+            # Sort by fastest average resolution
+            perf_df['Avg_Resolution_Days'] = perf_df['Avg_Resolution_Days'].round(1)
+            perf_df = perf_df.sort_values(by=['Total_Resolved', 'Avg_Resolution_Days'], ascending=[False, True])
+
+            # Top Performers Highlight Cards
+            top_col1, top_col2 = st.columns(2)
+            with top_col1:
+                top_resolver = perf_df.iloc[0][assigned_col] if len(perf_df) > 0 else "N/A"
+                st.success(f"🌟 **Most Tickets Closed:** {top_resolver}")
+            with top_col2:
+                fastest = perf_df.sort_values(by='Avg_Resolution_Days', ascending=True).iloc[0][assigned_col] if len(perf_df) > 0 else "N/A"
+                st.info(f"⚡ **Fastest Avg Turnaround:** {fastest}")
+
+            st.dataframe(
+                perf_df.rename(columns={
+                    assigned_col: "Assignee Name",
+                    "Total_Resolved": "Tickets Handled",
+                    "Avg_Resolution_Days": "Avg Resolution (Days)",
+                    "SLA_Compliance_%": "SLA Compliance %"
+                }),
+                use_container_width=True
+            )
+        else:
+            st.info("Column for 'Assigned To' not found in dataset.")
+
+    with tab3:
         c1, c2 = st.columns(2)
         with c1:
             st.subheader("📋 Priority Volume Breakdown")
@@ -264,19 +286,28 @@ if df is not None:
         
         with c2:
             st.subheader("📊 Age Distribution Summary")
-            if 'Age_Days' in df.columns:
+            if 'Ageing_Bucket' in df.columns:
                 st.bar_chart(df['Ageing_Bucket'].value_counts())
 
-    with tab3:
-        c1, c2 = st.columns([1, 2])
-        with c1:
-            st.subheader("📝 Lead Status Notes")
-            st.text_area(
-                "TL Status Highlights",
-                value="• Operations: Ticket queue cleanup ongoing.\n• PBI R&S Team fix planned for release.\n• Ageing items under daily review.",
-                height=220
-            )
-        with c2:
+    with tab4:
+        st.subheader("📑 Interactive Data Sheet & Export Center")
+        
+        # Download Action Button
+        buffer = io.BytesIO()
+        with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False, sheet_name='Filtered_Incidents')
+        
+        st.download_button(
+            label="📥 Download Current Sheet (.xlsx)",
+            data=buffer.getvalue(),
+            file_name="Incident_Report_Export.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+        
+        st.dataframe(df, use_container_width=True, height=400)
+
+else:
+    st.error("Dataset missing. Verify configuration or upload manually via sidebar.")
             st.subheader("🔍 Complete Raw Data Access")
             st.dataframe(df, use_container_width=True, height=220)
 
