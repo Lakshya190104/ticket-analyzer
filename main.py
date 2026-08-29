@@ -19,10 +19,12 @@ st.caption("Automated Incident & Change Request Analytics")
 
 # Replace this with your exact Raw GitHub URL (or local file name if in the same folder)
 GITHUB_FILE_URL = "https://raw.githubusercontent.com/Lakshya190104/ticket-analyzer/main/INCIDENT_YTD_DUMP.xlsx"
+
 @st.cache_data(ttl=300)  # Caches data for 5 minutes before checking GitHub for changes again
 def load_local_data(path):
-    def load_local_data(path):
     try:
+        if str(path).endswith('.csv'):
+            return pd.read_csv(path)
         return pd.read_excel(path, engine="openpyxl")
     except Exception as e:
         return None
