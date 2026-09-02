@@ -13,7 +13,7 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------------
-# Custom Modern UI Styling
+# Custom Modern UI Styling & Helper Components
 # ---------------------------------------------------------
 def apply_custom_css():
     st.markdown("""
@@ -47,13 +47,6 @@ def apply_custom_css():
             padding: 0.6rem 1rem !important;
             width: 100%;
         }
-        div[data-testid="stMetric"] {
-            background: rgba(255, 255, 255, 0.04);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            padding: 18px 22px;
-            border-radius: 14px;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
-        }
         .stTabs [data-baseweb="tab-list"] {
             gap: 12px;
         }
@@ -68,6 +61,28 @@ def apply_custom_css():
             color: white !important;
         }
         </style>
+    """, unsafe_allow_html=True)
+
+def render_kpi_card(title, value, subtitle="", accent_color="#6366f1", icon="📊"):
+    """Renders a modern, glassmorphic KPI card with custom border accents."""
+    st.markdown(f"""
+    <div style="
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-left: 5px solid {accent_color};
+        border-radius: 14px;
+        padding: 18px 22px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.25);
+        backdrop-filter: blur(10px);
+        margin-bottom: 15px;
+    ">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="color: #94a3b8; font-size: 0.85rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">{title}</span>
+            <span style="font-size: 1.2rem;">{icon}</span>
+        </div>
+        <h2 style="color: #ffffff; margin: 8px 0 4px 0; font-size: 2rem; font-weight: 700; font-family: sans-serif;">{value}</h2>
+        <p style="color: #64748b; margin: 0; font-size: 0.8rem; font-weight: 500;">{subtitle}</p>
+    </div>
     """, unsafe_allow_html=True)
 
 # ---------------------------------------------------------
@@ -186,19 +201,24 @@ if df is not None:
         if selected_assignees:
             df = df[df[assigned_col].isin(selected_assignees)]
 
-    # 1. KPI Top Bar Metrics
+    # 1. KPI Top Bar Cards
     col1, col2, col3, col4 = st.columns(4)
 
-    col1.metric("Total Incidents", f"{len(df):,}")
-
     high_prio_count = len(df[df[priority_col].astype(str).str.contains('1|2|High|Critical', case=False, na=False)]) if priority_col else 0
-    col2.metric("High / Critical Prio", f"{high_prio_count:,}")
-
     aging_count = len(df[df['Age_Weeks'] > 4]) if 'Age_Weeks' in df.columns else 0
-    col3.metric("Ageing (> 4 Weeks)", f"{aging_count:,}")
-
     sla_breaches = len(df[df[sla_col] == False]) if sla_col else 0
-    col4.metric("SLA Breaches", f"{sla_breaches:,}")
+
+    with col1:
+        render_kpi_card("Total Incidents", f"{len(df):,}", "Active Queue Volume", "#6366f1", "📁")
+
+    with col2:
+        render_kpi_card("High / Critical Prio", f"{high_prio_count:,}", "Requires Immediate Action", "#ef4444", "🔥")
+
+    with col3:
+        render_kpi_card("Ageing (> 4 Weeks)", f"{aging_count:,}", "Stale Incident Backlog", "#f59e0b", "⏳")
+
+    with col4:
+        render_kpi_card("SLA Breaches", f"{sla_breaches:,}", "Target: 0 Breaches", "#10b981", "⚠️")
 
     st.markdown("<br>", unsafe_allow_html=True)
 
@@ -220,8 +240,10 @@ if df is not None:
             old_tickets = len(df[df['Age_Weeks'] > 4]) if 'Age_Weeks' in df.columns else 0
             
             sum_col1, sum_col2 = st.columns(2)
-            sum_col1.metric("Total Open Queue", f"{total_active} Tickets")
-            sum_col2.metric("Stale Backlog (>4 Weeks)", f"{old_tickets} Tickets", delta="-Needs Action" if old_tickets > 0 else "Clean", delta_color="inverse")
+            with sum_col1:
+                render_kpi_card("Total Open Queue", f"{total_active} Tickets", "Current filtered view", "#8b5cf6", "📥")
+            with sum_col2:
+                render_kpi_card("Stale Backlog (>4 Wks)", f"{old_tickets} Tickets", "Needs Urgent Review", "#ec4899", "🚨")
 
             st.markdown("<br>", unsafe_allow_html=True)
             
